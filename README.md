@@ -7,7 +7,7 @@ A lightweight macOS menu bar app that displays your Claude API usage as a floati
 
 ## Download
 
-**[Download SimpleClaudeMonitor.dmg](https://github.com/lexey111/SimpleClaudeMonitor/releases/latest/download/SimpleClaudeMonitor-1.0.1.dmg)**
+**[Download SimpleClaudeMonitor.zip](https://github.com/lexey111/SimpleClaudeMonitor/releases/latest/download/SimpleClaudeMonitor-v1.1.0.zip)**
 
 ### Install
 
