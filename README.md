@@ -9,7 +9,15 @@ A lightweight macOS menu bar app that displays your Claude API usage as a floati
 
 **[Download SimpleClaudeMonitor-1.0.dmg](https://github.com/lexey111/SimpleClaudeMonitor/releases/latest/download/SimpleClaudeMonitor-1.0.dmg)**
 
-Open the DMG and drag **SimpleClaudeMonitor** to **Applications**. On first launch, allow Keychain access when prompted.
+### Install
+
+1. Open the DMG and drag **SimpleClaudeMonitor** to **Applications**
+2. **Important — the app is not notarized**, so macOS will block it on first launch:
+   - Open **System Settings → Privacy & Security**
+   - Scroll down to the Security section — you'll see a message about SimpleClaudeMonitor being blocked
+   - Click **Open Anyway**, then confirm in the dialog
+   - Alternatively: right-click the app in Applications → **Open** → **Open** in the dialog
+3. On first launch, allow Keychain access to "Claude Code-credentials" when prompted
 
 > Requires macOS 15.0+ and [Claude Code](https://docs.anthropic.com/en/docs/claude-code) logged in (`claude login`).
 
