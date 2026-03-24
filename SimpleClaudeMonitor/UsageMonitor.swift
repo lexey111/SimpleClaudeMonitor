@@ -1,4 +1,5 @@
 import Combine
+import CoreGraphics
 import Foundation
 import Security
 
@@ -42,6 +43,30 @@ struct OAuthCredentials: Codable {
     let subscriptionType: String?
 }
 
+// MARK: - Display Mode
+
+enum DisplayMode: String, CaseIterable {
+    case bars
+    case gauges
+    case mini
+
+    var label: String {
+        switch self {
+        case .bars:   return "Bars"
+        case .gauges: return "Gauges"
+        case .mini:   return "Mini"
+        }
+    }
+
+    var windowSize: CGSize {
+        switch self {
+        case .bars:   return CGSize(width: 280, height: 160)
+        case .gauges: return CGSize(width: 280, height: 180)
+        case .mini:   return CGSize(width: 280, height: 40)
+        }
+    }
+}
+
 // MARK: - Monitor
 
 @MainActor
@@ -56,42 +81,68 @@ class UsageMonitor: ObservableObject {
     @Published var warningMessage: String? = nil
     @Published var isDataStale: Bool = false
     @Published var isLoading: Bool = true
+    @Published var isWaitingForKeychain: Bool = false
+    @Published var displayMode: DisplayMode = .bars
 
     private var timer: Timer?
-    private let basePollInterval: TimeInterval = 300
-    private let maxPollInterval: TimeInterval = 900
+    private let basePollInterval: TimeInterval = 120
+    private let maxPollInterval: TimeInterval = 600
     private var consecutiveRateLimits: Int = 0
     private var cachedToken: String?
     private var lastFetchTime: Date?
     private let minFetchInterval: TimeInterval = 30
 
+    private static let displayModeKey = "displayMode"
+
+    init() {
+        if let saved = UserDefaults.standard.string(forKey: Self.displayModeKey),
+           let mode = DisplayMode(rawValue: saved) {
+            displayMode = mode
+        }
+    }
+
+    func setDisplayMode(_ mode: DisplayMode) {
+        displayMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: Self.displayModeKey)
+    }
+
     // MARK: - Keychain
 
-    private func readToken() -> String? {
+    private func readToken() async -> String? {
         if let token = cachedToken { return token }
 
-        let query: [String: Any] = [
-            kSecClass as String:            kSecClassGenericPassword,
-            kSecAttrService as String:      "Claude Code-credentials",
-            kSecReturnData as String:       true,
-            kSecMatchLimit as String:       kSecMatchLimitOne
-        ]
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        // Run keychain access off the main thread so the UI
+        // (including animations) stays responsive during the
+        // system permission dialog.
+        let token: String? = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let query: [String: Any] = [
+                    kSecClass as String:            kSecClassGenericPassword,
+                    kSecAttrService as String:      "Claude Code-credentials",
+                    kSecReturnData as String:       true,
+                    kSecMatchLimit as String:       kSecMatchLimitOne
+                ]
+                var result: AnyObject?
+                let status = SecItemCopyMatching(query as CFDictionary, &result)
 
-        if status == errSecSuccess, let data = result as? Data {
-            if let creds = try? JSONDecoder().decode(ClaudeCredentials.self, from: data) {
-                cachedToken = creds.claudeAiOauth.accessToken
-                return cachedToken
+                if status == errSecSuccess, let data = result as? Data {
+                    if let creds = try? JSONDecoder().decode(ClaudeCredentials.self, from: data) {
+                        continuation.resume(returning: creds.claudeAiOauth.accessToken)
+                        return
+                    }
+                    let raw = String(data: data, encoding: .utf8)?
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    continuation.resume(returning: raw)
+                    return
+                }
+
+                let envToken = ProcessInfo.processInfo.environment["CLAUDE_API_TOKEN"]
+                continuation.resume(returning: envToken)
             }
-            let raw = String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            cachedToken = raw
-            return cachedToken
         }
 
-        cachedToken = ProcessInfo.processInfo.environment["CLAUDE_API_TOKEN"]
-        return cachedToken
+        cachedToken = token
+        return token
     }
 
     // MARK: - Fetch
@@ -103,7 +154,11 @@ class UsageMonitor: ObservableObject {
             return
         }
 
-        guard let token = readToken() else {
+        isWaitingForKeychain = cachedToken == nil
+        let token = await readToken()
+        isWaitingForKeychain = false
+
+        guard let token else {
             errorMessage = "Token not found in Keychain.\nRun: claude login"
             isLoading = false
             return

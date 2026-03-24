@@ -5,9 +5,15 @@ A lightweight macOS menu bar app that displays your Claude API usage as a floati
 ![macOS](https://img.shields.io/badge/macOS-15.0+-blue)
 ![Swift](https://img.shields.io/badge/Swift-5-orange)
 
+## Screenshots
+
+| Bars | Gauges | Mini |
+|------|--------|------|
+| ![Bars mode](screenshot1.png) | ![Gauges mode](screenshot2.png) | ![Mini mode](screenshot3.png) |
+
 ## Download
 
-**[Download SimpleClaudeMonitor.dmg](https://github.com/lexey111/SimpleClaudeMonitor/releases/latest/download/SimpleClaudeMonitor-1.2.0.dmg)**
+**[Download SimpleClaudeMonitor.dmg](https://github.com/lexey111/SimpleClaudeMonitor/releases/latest/download/SimpleClaudeMonitor-1.3.0.dmg)**
 
 ### Install
 
@@ -23,11 +29,14 @@ A lightweight macOS menu bar app that displays your Claude API usage as a floati
 
 ## Features
 
+- **Three display modes** — Bars, Gauges, and Mini, switchable via menu bar (Cmd+1/2/3)
 - **Floating widget** — always-on-top translucent panel showing session (5-hour) and weekly (7-day) usage
-- **Live countdown** — real-time timers showing when each usage window resets
-- **Menu bar icon** — gauge icon in the macOS menu bar with About and Quit actions
+- **Unified color scale** — blue → green → greenyellow → yellow → orange → red based on utilization
+- **Live countdown** — reset timers appear when utilization exceeds 80%
+- **Menu bar icon** — gauge icon with mode switching, About, and Quit
 - **Auto-polling** — refreshes usage data every 2 minutes, with a manual refresh button
 - **Limit detection** — visual warning when session usage hits 100%
+- **Mode persistence** — last selected mode is remembered across restarts
 
 ## How It Works
 
@@ -53,16 +62,16 @@ On first launch the system will ask for Keychain access to "Claude Code-credenti
 
 | File | Purpose |
 |---|---|
-| `SimpleClaudeMonitorApp.swift` | App entry point, `AppDelegate` that creates the floating `NSPanel`, `NSStatusItem` menu bar icon, and About dialog |
-| `FloatingWidget.swift` | SwiftUI view — dark translucent widget with usage bars, countdown timers, and status indicators |
-| `UsageMonitor.swift` | `ObservableObject` that reads the Keychain token, polls the Anthropic API, and publishes usage state |
+| `SimpleClaudeMonitorApp.swift` | App entry point, `AppDelegate` that creates the floating `NSPanel`, menu bar icon with mode switching, and animated window resizing |
+| `FloatingWidget.swift` | SwiftUI view — three display modes (bars, arc gauges, mini), unified color scale, and status indicators |
+| `UsageMonitor.swift` | `ObservableObject` with `DisplayMode` enum, Keychain token reading, API polling, and mode persistence via `UserDefaults` |
 
 ## Configuration
 
 The app runs as a background accessory (no Dock icon). It is controlled entirely through:
 
 - **The floating widget** — drag to reposition, click the refresh button for an immediate update
-- **The menu bar icon** — click for About / Quit
+- **The menu bar icon** — switch between Bars/Gauges/Mini modes (Cmd+1/2/3), About, Quit
 
 ## License
 
