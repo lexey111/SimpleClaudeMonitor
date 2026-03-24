@@ -53,11 +53,17 @@ class UsageMonitor: ObservableObject {
     @Published var isLimitReached: Bool = false
     @Published var lastUpdated: Date? = nil
     @Published var errorMessage: String? = nil
+    @Published var warningMessage: String? = nil
+    @Published var isDataStale: Bool = false
     @Published var isLoading: Bool = true
 
     private var timer: Timer?
-    private let pollInterval: TimeInterval = 120
+    private let basePollInterval: TimeInterval = 300
+    private let maxPollInterval: TimeInterval = 900
+    private var consecutiveRateLimits: Int = 0
     private var cachedToken: String?
+    private var lastFetchTime: Date?
+    private let minFetchInterval: TimeInterval = 30
 
     // MARK: - Keychain
 
@@ -90,7 +96,13 @@ class UsageMonitor: ObservableObject {
 
     // MARK: - Fetch
 
-    func fetch() async {
+    func fetch(force: Bool = false) async {
+        // Debounce: skip if fetched recently (unless it's a scheduled poll)
+        if !force, let last = lastFetchTime,
+           Date().timeIntervalSince(last) < minFetchInterval {
+            return
+        }
+
         guard let token = readToken() else {
             errorMessage = "Token not found in Keychain.\nRun: claude login"
             isLoading = false
@@ -108,6 +120,7 @@ class UsageMonitor: ObservableObject {
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
         request.setValue("gzip, compress, deflate, br", forHTTPHeaderField: "Accept-Encoding")
         request.timeoutInterval = 10
+        lastFetchTime = Date()
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -120,13 +133,14 @@ class UsageMonitor: ObservableObject {
                     return
                 }
                 if http.statusCode == 429 {
-                    errorMessage = "Rate limited.\nRetry in a couple of minutes."
-                    isLoading = false
+                    handleTransientError(
+                        message: "Rate limited",
+                        retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After")
+                    )
                     return
                 }
                 if http.statusCode != 200 {
-                    errorMessage = "HTTP \(http.statusCode)"
-                    isLoading = false
+                    handleTransientError(message: "HTTP \(http.statusCode)")
                     return
                 }
             }
@@ -140,26 +154,73 @@ class UsageMonitor: ObservableObject {
             isLimitReached     = sessionUtilization >= 1.0
             lastUpdated        = Date()
             errorMessage       = nil
+            warningMessage     = nil
+            isDataStale        = false
+            consecutiveRateLimits = 0
             isLoading          = false
+            scheduleNextFetch(interval: basePollInterval)
 
         } catch {
-            errorMessage = "Error: \(error.localizedDescription)"
-            isLoading = false
+            handleTransientError(message: error.localizedDescription)
         }
+    }
+
+    private func handleTransientError(message: String, retryAfterHeader: String? = nil) {
+        consecutiveRateLimits += 1
+
+        if lastUpdated != nil {
+            // We have cached data — show warning, keep data visible
+            warningMessage = message
+            isDataStale = true
+            errorMessage = nil
+        } else {
+            // No cached data — show hard error
+            errorMessage = "\(message)\nRetry in a moment."
+        }
+        isLoading = false
+
+        let backoffInterval = nextBackoffInterval(retryAfterHeader: retryAfterHeader)
+        scheduleNextFetch(interval: backoffInterval)
+    }
+
+    private func nextBackoffInterval(retryAfterHeader: String? = nil) -> TimeInterval {
+        // Use Retry-After header if present
+        if let header = retryAfterHeader {
+            // Try parsing as seconds
+            if let seconds = Double(header), seconds > 0 {
+                return min(seconds, maxPollInterval)
+            }
+            // Try parsing as HTTP-date (e.g. "Thu, 01 Dec 1994 16:00:00 GMT")
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+            if let date = formatter.date(from: header) {
+                let delay = date.timeIntervalSinceNow
+                if delay > 0 { return min(delay, maxPollInterval) }
+            }
+        }
+        // Exponential backoff: 120 * 2^(n-1), capped at 600
+        let exponent = consecutiveRateLimits - 1
+        let interval = basePollInterval * pow(2.0, Double(exponent))
+        return min(interval, maxPollInterval)
     }
 
     // MARK: - Polling
 
     func startPolling() {
-        Task { await fetch() }
-        timer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
-            Task { await self?.fetch() }
-        }
+        Task { await fetch(force: true) }
     }
 
     func stopPolling() {
         timer?.invalidate()
         timer = nil
+    }
+
+    private func scheduleNextFetch(interval: TimeInterval) {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            Task { await self?.fetch(force: true) }
+        }
     }
 
     // MARK: - Helpers

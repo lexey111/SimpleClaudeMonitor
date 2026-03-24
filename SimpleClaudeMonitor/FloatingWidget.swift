@@ -27,6 +27,14 @@ struct FloatingWidget: View {
             } else {
                 mainContent
             }
+
+            // Stale data warning overlay at bottom
+            if monitor.isDataStale, let warning = monitor.warningMessage {
+                VStack {
+                    Spacer()
+                    staleBanner(warning)
+                }
+            }
         }
         .frame(width: 280, height: 160)
         .onAppear {
@@ -44,7 +52,7 @@ struct FloatingWidget: View {
             // Header
             HStack {
                 Circle()
-                    .fill(monitor.isLimitReached ? Color.red : Color(hex: "1DB954"))
+                    .fill(statusDotColor)
                     .frame(width: 6, height: 6)
                 Text("Claude")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
@@ -52,7 +60,7 @@ struct FloatingWidget: View {
                 Spacer()
                 Text(lastUpdatedLabel)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.25))
+                    .foregroundColor(monitor.isDataStale ? .yellow.opacity(0.6) : .white.opacity(0.25))
 
                 // Refresh button
                 Button(action: { Task { await monitor.fetch() } }) {
@@ -179,6 +187,28 @@ struct FloatingWidget: View {
         )
     }
 
+    // MARK: - Stale Data Banner
+
+    private func staleBanner(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 9))
+                .foregroundColor(.yellow.opacity(0.7))
+            Text("stale · \(message)")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.yellow.opacity(0.8))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 5)
+        .background(Color.yellow.opacity(0.08))
+        .overlay(
+            Rectangle()
+                .fill(Color.yellow.opacity(0.15))
+                .frame(height: 0.5),
+            alignment: .top
+        )
+    }
+
     // MARK: - Loading / Error
 
     private var loadingView: some View {
@@ -212,6 +242,12 @@ struct FloatingWidget: View {
     }
 
     // MARK: - Computed
+
+    private var statusDotColor: Color {
+        if monitor.isDataStale { return .yellow }
+        if monitor.isLimitReached { return .red }
+        return Color(hex: "1DB954")
+    }
 
     private var sessionColor: Color {
         switch monitor.sessionUtilization {
