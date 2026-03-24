@@ -234,10 +234,12 @@ class UsageMonitor: ObservableObject {
     func countdownString(to date: Date) -> String {
         let diff = date.timeIntervalSinceNow
         guard diff > 0 else { return "resetting..." }
-        let h = Int(diff) / 3600
-        let m = (Int(diff) % 3600) / 60
-        let s = Int(diff) % 60
-        if h > 0 { return String(format: "%d:%02d:%02d", h, m, s) }
-        return String(format: "%d:%02d", m, s)
+        let total = Int(diff)
+        let d = total / 86400
+        let h = (total % 86400) / 3600
+        let m = (total % 3600) / 60
+        if d > 0 { return "\(d)d \(h)h" }
+        if h > 0 { return "\(h)h \(m)m" }
+        return "\(m)m"
     }
 }
