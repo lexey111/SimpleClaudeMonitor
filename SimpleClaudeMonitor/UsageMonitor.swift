@@ -56,7 +56,7 @@ class UsageMonitor: ObservableObject {
     @Published var isLoading: Bool = true
 
     private var timer: Timer?
-    private let pollInterval: TimeInterval = 30
+    private let pollInterval: TimeInterval = 120
     private var cachedToken: String?
 
     // MARK: - Keychain
@@ -112,18 +112,29 @@ class UsageMonitor: ObservableObject {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
 
-            if let http = response as? HTTPURLResponse, http.statusCode == 401 {
-                cachedToken = nil  // force re-read on next attempt
-                errorMessage = "Token expired.\nRun: claude login"
-                isLoading = false
-                return
+            if let http = response as? HTTPURLResponse {
+                if http.statusCode == 401 {
+                    cachedToken = nil
+                    errorMessage = "Token expired.\nRun: claude login"
+                    isLoading = false
+                    return
+                }
+                if http.statusCode == 429 {
+                    errorMessage = "Rate limited.\nRetry in a couple of minutes."
+                    isLoading = false
+                    return
+                }
+                if http.statusCode != 200 {
+                    errorMessage = "HTTP \(http.statusCode)"
+                    isLoading = false
+                    return
+                }
             }
 
             let usage = try JSONDecoder().decode(UsageResponse.self, from: data)
 
-            // API returns 0–100 percentages; normalize to 0–1
-            sessionUtilization = (usage.fiveHour?.utilization ?? 0) / 100.0
-            weeklyUtilization  = (usage.sevenDay?.utilization ?? 0) / 100.0
+            sessionUtilization = usage.fiveHour?.utilization ?? 0
+            weeklyUtilization  = usage.sevenDay?.utilization ?? 0
             sessionResetsAt    = usage.fiveHour?.resetsAtDate
             weeklyResetsAt     = usage.sevenDay?.resetsAtDate
             isLimitReached     = sessionUtilization >= 1.0
