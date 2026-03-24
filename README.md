@@ -5,12 +5,20 @@ A lightweight macOS menu bar app that displays your Claude API usage as a floati
 ![macOS](https://img.shields.io/badge/macOS-15.0+-blue)
 ![Swift](https://img.shields.io/badge/Swift-5-orange)
 
+## Download
+
+**[Download SimpleClaudeMonitor-1.0.dmg](https://github.com/lexey111/SimpleClaudeMonitor/releases/latest/download/SimpleClaudeMonitor-1.0.dmg)**
+
+Open the DMG and drag **SimpleClaudeMonitor** to **Applications**. On first launch, allow Keychain access when prompted.
+
+> Requires macOS 15.0+ and [Claude Code](https://docs.anthropic.com/en/docs/claude-code) logged in (`claude login`).
+
 ## Features
 
 - **Floating widget** — always-on-top translucent panel showing session (5-hour) and weekly (7-day) usage
 - **Live countdown** — real-time timers showing when each usage window resets
 - **Menu bar icon** — gauge icon in the macOS menu bar with About and Quit actions
-- **Auto-polling** — refreshes usage data every 30 seconds, with a manual refresh button
+- **Auto-polling** — refreshes usage data every 2 minutes, with a manual refresh button
 - **Limit detection** — visual warning when session usage hits 100%
 
 ## How It Works
