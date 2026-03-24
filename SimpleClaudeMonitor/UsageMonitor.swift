@@ -147,8 +147,8 @@ class UsageMonitor: ObservableObject {
 
             let usage = try JSONDecoder().decode(UsageResponse.self, from: data)
 
-            sessionUtilization = usage.fiveHour?.utilization ?? 0
-            weeklyUtilization  = usage.sevenDay?.utilization ?? 0
+            sessionUtilization = Self.normalizeUtilization(usage.fiveHour?.utilization ?? 0)
+            weeklyUtilization  = Self.normalizeUtilization(usage.sevenDay?.utilization ?? 0)
             sessionResetsAt    = usage.fiveHour?.resetsAtDate
             weeklyResetsAt     = usage.sevenDay?.resetsAtDate
             isLimitReached     = sessionUtilization >= 1.0
@@ -163,6 +163,12 @@ class UsageMonitor: ObservableObject {
         } catch {
             handleTransientError(message: error.localizedDescription)
         }
+    }
+
+    /// API sometimes returns 0–1 (fraction) and sometimes 0–100 (percentage).
+    /// Normalize to 0–1 so the rest of the app can assume a fraction.
+    private static func normalizeUtilization(_ raw: Double) -> Double {
+        raw > 1.0 ? raw / 100.0 : raw
     }
 
     private func handleTransientError(message: String, retryAfterHeader: String? = nil) {
